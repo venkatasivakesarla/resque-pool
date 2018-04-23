@@ -324,3 +324,34 @@ describe Resque::Pool, "#create_worker" do
     end
   end
 end
+
+describe Resque::Pool do
+  let(:resque_pool) { Resque::Pool.new(nil) }
+
+  describe "#awaken_master" do
+    subject { resque_pool.awaken_master }
+
+    context "when called by worker" do
+      before do
+        allow(resque_pool).to receive(:is_master?).and_return(false)
+      end
+
+      it "should do nothing" do
+        expect(resque_pool.self_pipe.last).not_to receive(:write_nonblock)
+        subject
+      end
+    end
+
+    context "when called by master" do
+      before do
+        allow(resque_pool).to receive(:is_master?).and_return(true)
+      end
+
+      it "should write . to self_pipe" do
+        expect(resque_pool.self_pipe.last).to receive(:write_nonblock).with('.')
+        subject
+      end
+    end
+  end
+end
+

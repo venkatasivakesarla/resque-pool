@@ -145,7 +145,16 @@ module Resque
       trap(:CHLD)     { |_| awaken_master }
     end
 
+    def set_master
+      @master_pid = Process.pid
+    end
+
+    def is_master?
+      @master_pid == Process.pid
+    end
+
     def awaken_master
+      return unless is_master?
       begin
         self_pipe.last.write_nonblock('.') # wakeup master process from select
       rescue Errno::EAGAIN, Errno::EINTR
@@ -158,6 +167,7 @@ module Resque
     # defer a signal for later processing in #join (master process)
     def trap_deferred(signal)
       trap(signal) do |sig_nr|
+        next unless is_master?
         if @waiting_for_reaper && [:INT, :TERM].include?(signal)
           log "Recieved #{signal}: short circuiting QUIT waitpid"
           raise QuitNowException
@@ -172,6 +182,7 @@ module Resque
     end
 
     def reset_sig_handlers!
+      trap(:CHLD, "DEFAULT")
       QUEUE_SIGS.each {|sig| trap(sig, "DEFAULT") }
     end
 
@@ -258,6 +269,7 @@ module Resque
 
     def start
       procline("(starting)")
+      set_master
       init_self_pipe!
       init_sig_handlers!
       maintain_worker_count
@@ -390,9 +402,9 @@ module Resque
         Process.setpgrp unless Resque::Pool.single_process_group
         worker.worker_parent_pid = Process.pid
         log_worker "Starting worker #{worker}"
-        call_after_prefork!(worker)
         reset_sig_handlers!
         #self_pipe.each {|io| io.close }
+        call_after_prefork!(worker)
         worker.work(ENV['INTERVAL'] || DEFAULT_WORKER_INTERVAL) # interval, will block
       end
       workers[queues][pid] = worker

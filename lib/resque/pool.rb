@@ -58,6 +58,32 @@ module Resque
     end
 
     # }}}
+
+    # Config: register {{{
+
+    # Use `register` to use different workers depending on the queue definitions.
+    # Queue definitions that start with <kind>: will use these registrations to
+    # figure out which worker class to instantiate.
+    #
+    def self.register(kind, worker_class)
+      @registrations ||= {}
+
+      # worker_class must include Resque::Pool::PooledWorker
+      unless worker_class.include?(Resque::Pool::PooledWorker)
+        worker_class.include Resque::Pool::PooledWorker
+      end
+
+      @registrations[kind.to_sym] = worker_class
+    end
+
+    def self.worker_class_for(kind)
+      klass = @registrations&.dig(kind.to_sym)
+      raise ArgumentError, "Registration missing for #{kind}" unless klass
+      klass
+    end
+
+    # }}}
+
     # Config: class methods to start up the pool using the config loader {{{
 
     class << self; attr_accessor :config_loader, :app_name, :spawn_delay; end
@@ -411,8 +437,7 @@ module Resque
     end
 
     def create_worker(queues)
-      queues = queues.to_s.split(',')
-      worker = ::Resque::Worker.new(*queues)
+      worker = new_worker(queues)
       worker.pool_master_pid = Process.pid
       worker.term_timeout = ENV['RESQUE_TERM_TIMEOUT'] || 4.0
       worker.term_child = ENV['TERM_CHILD']
@@ -429,6 +454,20 @@ module Resque
       worker
     end
 
+    def new_worker(queues)
+      cidx = queues.index(':')
+      if cidx
+        kind = queues[0..cidx-1].to_sym
+
+        klass = self.class.worker_class_for(kind)
+        queues = queues[cidx+1..queues.length]
+      else
+        klass = ::Resque::Worker
+      end
+
+      queues = queues.to_s.split(',')
+      klass.new(*queues)
+    end
     # }}}
 
   end

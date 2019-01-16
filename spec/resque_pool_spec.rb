@@ -310,6 +310,30 @@ describe Resque::Pool, "given after_prefork hook" do
   end
 end
 
+describe Resque::Pool, "given register" do
+  subject { Resque::Pool.new(nil) }
+
+  let(:queues) { double }
+
+  context "with a registration" do
+    before do
+      ret = Resque::Pool.register :kafka, Resque::Worker
+      expect(ret).to eq(Resque::Worker)
+    end
+
+    it "should return the worker class registered" do
+      ret = Resque::Pool.worker_class_for('kafka')
+      expect(ret).to eq(Resque::Worker)
+      ret = Resque::Pool.worker_class_for(:kafka)
+      expect(ret).to eq(Resque::Worker)
+    end
+
+    it "should raise if there is no class registered" do
+      expect { Resque::Pool.worker_class_for(:does_not_exist) }.to raise_error(ArgumentError)
+    end
+  end
+end
+
 describe Resque::Pool do
   let(:resque_pool) { Resque::Pool.new(nil) }
 

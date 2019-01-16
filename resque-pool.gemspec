@@ -5,7 +5,7 @@ Gem::Specification.new do |s|
   s.version     = Resque::Pool::VERSION
   s.authors     = ["nicholas a. evans",]
   s.email       = ["nick@ekenosen.net"]
-  s.homepage    = "http://github.com/nevans/resque-pool"
+  s.homepage    = "http://github.com/coupa/resque-pool"
   s.summary     = "quickly and easily fork a pool of resque workers"
   s.license     = 'MIT'
   s.description = <<-EOF

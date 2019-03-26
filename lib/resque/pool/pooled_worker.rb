@@ -2,6 +2,9 @@ require 'resque/worker'
 
 class Resque::Pool
   module PooledWorker
+    attr_accessor :queue_definition
+    attr_accessor :spawned_at
+
     attr_accessor :pool_master_pid
     attr_accessor :worker_parent_pid
 

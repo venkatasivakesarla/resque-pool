@@ -5,6 +5,7 @@ require 'resque/pool/version'
 require 'resque/pool/logging'
 require 'resque/pool/pooled_worker'
 require 'resque/pool/config_loaders/file_or_hash_loader'
+require 'resque/pool/spawn_limiter'
 require 'erb'
 require 'fcntl'
 require 'yaml'
@@ -21,10 +22,18 @@ module Resque
     attr_reader :config
     attr_reader :config_loader
     attr_reader :workers
+    attr_reader :spawn_limiter
 
     def initialize(config_loader=nil)
       init_config(config_loader)
       @workers = Hash.new { |workers, queues| workers[queues] = {} }
+      @delay_spawn_limit = (ENV['DELAY_SPAWN_LIMIT'] || 10).to_i
+      @spawn_limiter = Hash.new do |h, queues|
+        h[queues] = SpawnLimiter.new(
+          delay_step: @delay_spawn_limit,
+          delay_max: (ENV['DELAY_SPAWN_MAX'] || 600).to_i,
+        )
+      end
       procline "(initialized)"
     end
 
@@ -367,6 +376,7 @@ module Resque
     def reap_all_workers(waitpid_flags=Process::WNOHANG)
       @waiting_for_reaper = waitpid_flags == 0
       begin
+        reaped = Hash.new { |h, queues| h[queues] = [] }
         loop do
           # -1, wait for any child process
           wpid, status = Process.waitpid2(-1, waitpid_flags)
@@ -374,9 +384,21 @@ module Resque
 
           if worker = delete_worker(wpid)
             log "Reaped resque worker[#{status.pid}] (status: #{status.exitstatus}) queues: #{worker.queues.join(",")}"
+            reaped[worker.queue_definition] << worker.spawned_at
           else
             # this died before it could be killed, so it's not going to have any extra info
             log "Tried to reap worker [#{status.pid}], but it had already died. (status: #{status.exitstatus})"
+          end
+        end
+
+        # Check if we are having trouble starting
+        now = Time.now
+        reaped.each do |queues, starts|
+          oldest = starts.min
+          if (now - oldest) < @delay_spawn_limit
+            spawn_limiter[queues].delay_spawns
+          else
+            spawn_limiter.delete(queues)
           end
         end
       rescue Errno::ECHILD, QuitNowException
@@ -437,7 +459,16 @@ module Resque
     end
 
     def worker_delta_for(queues)
-      config.fetch(queues, 0) - workers.fetch(queues, []).size
+      delta = config.fetch(queues, 0) - workers.fetch(queues, []).size
+
+      # Only allow downwards deltas while spawn is limited
+      ql = spawn_limiter[queues]
+      if delta > 0 && ql.should_spawn?
+        delta
+      else
+        puts "Delaying spawn until #{ql.delay_until} (failed_count=#{ql.failed_count}) for #{queues}"
+        0
+      end
     end
 
     def pids_for(queues)
@@ -461,6 +492,8 @@ module Resque
 
     def create_worker(queues)
       worker = new_worker(queues)
+      worker.queue_definition = queues
+      worker.spawned_at = Time.now
       worker.pool_master_pid = Process.pid
       worker.term_timeout = (ENV['RESQUE_TERM_TIMEOUT'] || 4.0).to_f
       worker.term_child = ENV['TERM_CHILD']

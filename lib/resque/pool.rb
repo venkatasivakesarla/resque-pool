@@ -441,11 +441,11 @@ module Resque
 
       # Only allow downwards deltas while spawn is limited
       ql = spawn_limiter[queues]
-      if delta > 0 && ql.should_spawn?
-        delta
-      else
+      if delta > 0 && !ql.should_spawn?
         puts "Delaying spawn until #{ql.delay_until} (failed_count=#{ql.failed_count}) for #{queues}"
         0
+      else
+        delta
       end
     end
 

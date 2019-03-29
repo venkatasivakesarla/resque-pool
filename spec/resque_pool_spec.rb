@@ -377,5 +377,72 @@ describe Resque::Pool do
       end
     end
   end
+
+  describe "#worker_delta_for" do
+    let(:queues) { "queues" }
+    let(:spawn_limiter) { Resque::Pool::SpawnLimiter.new(delay_step: 10, delay_max: 360) }
+
+    before do
+      expect(resque_pool).to receive(:config)
+        .and_return(
+          queues => desired_count
+        )
+      expect(resque_pool).to receive(:workers)
+        .and_return(
+          queues => [nil] * target_count
+        )
+      expect(resque_pool).to receive(:spawn_limiter)
+        .and_return(
+          queues => spawn_limiter
+        )
+      allow(spawn_limiter).to receive(:should_spawn?).and_return(should_spawn)
+    end
+
+    subject { resque_pool.worker_delta_for(queues) }
+
+    context "when spawns are limited" do
+      let(:should_spawn) { false }
+
+      context "and we are scaling down" do
+        let(:desired_count) { 1 }
+        let(:target_count) { 3 }
+
+        it "should return < 0" do
+          expect(subject).to eq(-2)
+        end
+      end
+
+      context "and we are scaling up" do
+        let(:desired_count) { 3 }
+        let(:target_count) { 1 }
+
+        it "should return 0" do
+          expect(subject).to eq(0)
+        end
+      end
+    end
+
+    context "when spawns are allowed" do
+      let(:should_spawn) { true }
+
+      context "and we are scaling down" do
+        let(:desired_count) { 1 }
+        let(:target_count) { 3 }
+
+        it "should return < 0" do
+          expect(subject).to eq(-2)
+        end
+      end
+
+      context "and we are scaling up" do
+        let(:desired_count) { 3 }
+        let(:target_count) { 1 }
+
+        it "should return > 0" do
+          expect(subject).to eq(2)
+        end
+      end
+    end
+  end
 end
 

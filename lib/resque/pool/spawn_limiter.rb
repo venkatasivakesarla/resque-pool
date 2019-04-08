@@ -14,7 +14,7 @@ module Resque
 
         # Exponential Backoff
         delay_secs = @delay_step ** @failed_count
-        delay_secs = delay_max if delay_secs > delay_max
+        delay_secs = @delay_max if delay_secs > @delay_max
         @delay_until = Time.now.since(delay_secs)
       end
 

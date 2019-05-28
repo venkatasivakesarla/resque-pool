@@ -373,7 +373,7 @@ module Resque
         now = Time.now
         reaped.each do |queues, starts|
           oldest = starts.min
-          if (now - oldest) < @delay_spawn_limit
+          if !oldest.nil? && (now - oldest) < @delay_spawn_limit
             spawn_limiter[queues].delay_spawns
           else
             spawn_limiter.delete(queues)

@@ -68,6 +68,34 @@ module Resque
 
     # }}}
 
+    # Config: poll {{{
+
+    # The `poll` hooks will be run in the pool master's main loop periodically.
+    #
+    # Call with a block to set a hook.
+    # Call with no arguments to return all registered hooks.
+    #
+    def self.poll(&block)
+      @poll ||= []
+      block ? (@poll << block) : @poll
+    end
+
+    # Sets the poll proc, clearing all pre-existing hooks.
+    # Warning: you probably don't want to clear out the other hooks.
+    # You can use `Resque::Pool.poll << my_hook` instead.
+    #
+    def self.poll=(poll)
+      @poll = [poll]
+    end
+
+    def call_poll!(pool)
+      self.class.poll.each do |hook|
+        hook.call(pool)
+      end
+    end
+
+    # }}}
+
     # Config: register {{{
 
     # Use `register` to use different workers depending on the queue definitions.
@@ -325,6 +353,7 @@ module Resque
     def join
       loop do
         reap_all_workers
+        poll
         break if handle_sig_queue! == :break
         if sig_queue.empty?
           master_sleep
@@ -337,6 +366,10 @@ module Resque
       #stop # gracefully shutdown all workers on our way out
       log "manager finished"
       #unlink_pid_safe(pid) if pid
+    end
+
+    def poll
+      call_poll!(self)
     end
 
     def master_sleep

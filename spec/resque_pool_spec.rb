@@ -310,6 +310,50 @@ describe Resque::Pool, "given after_prefork hook" do
   end
 end
 
+describe Resque::Pool, "given poll hook" do
+  subject { Resque::Pool.new(nil) }
+
+  let(:worker) { double }
+
+  context "with a single hook" do
+    before { Resque::Pool.poll { @called = true } }
+
+    it "should call poll" do
+      subject.call_poll!(worker)
+      @called.should == true
+    end
+  end
+
+  context "with a single hook by attribute writer" do
+    before { Resque::Pool.poll = Proc.new { @called = true } }
+
+    it "should call poll" do
+      subject.call_poll!(worker)
+      @called.should == true
+    end
+  end
+
+  context "with multiple hooks" do
+    before {
+      Resque::Pool.poll { @called_first = true }
+      Resque::Pool.poll { @called_second = true }
+    }
+
+    it "should call both" do
+      subject.call_poll!(worker)
+      @called_first.should == true
+      @called_second.should == true
+    end
+  end
+
+  it "passes the worker instance to the hook" do
+    val = nil
+    Resque::Pool.poll { |w| val = w }
+    subject.call_poll!(worker)
+    val.should == worker
+  end
+end
+
 describe Resque::Pool, "given register" do
   subject { Resque::Pool.new(nil) }
 

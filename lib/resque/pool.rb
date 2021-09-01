@@ -286,6 +286,8 @@ module Resque
           graceful_worker_shutdown_and_wait!(signal)
         when "graceful_worker_shutdown"
           graceful_worker_shutdown!(signal)
+        when "term_and_wait"
+          term_and_wait!(signal)
         else
           shutdown_everything_now!(signal)
         end
@@ -298,6 +300,7 @@ module Resque
 
     def graceful_worker_shutdown_and_wait!(signal)
       log "#{signal}: graceful shutdown, waiting for children"
+      signal_all_workers(:USR2) # Stop all workers from picking up new jobs
       if term_child
         signal_all_workers(:TERM)
       else
@@ -309,6 +312,7 @@ module Resque
 
     def graceful_worker_shutdown!(signal)
       log "#{signal}: immediate shutdown (graceful worker shutdown)"
+      signal_all_workers(:USR2) # Stop all workers from picking up new jobs
       if term_child
         signal_all_workers(:TERM)
       else
@@ -319,11 +323,20 @@ module Resque
 
     def shutdown_everything_now!(signal)
       log "#{signal}: immediate shutdown (and immediate worker shutdown)"
+      signal_all_workers(:USR2) # Stop all workers from picking up new jobs
       if term_child
         signal_all_workers(:QUIT)
       else
         signal_all_workers(:TERM)
       end
+      :break
+    end
+
+    def term_and_wait!(signal)
+      log "#{signal}: term_and_wait, waiting for children"
+      signal_all_workers(:USR2) # Stop all workers from picking up new jobs
+      signal_all_workers(:TERM)
+      reap_all_workers(0) # will hang until all workers are shutdown
       :break
     end
 

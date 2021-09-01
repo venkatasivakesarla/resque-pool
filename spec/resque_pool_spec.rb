@@ -407,6 +407,17 @@ describe Resque::Pool do
     end
   end
 
+  describe "#term_and_wait!" do
+    subject { resque_pool.term_and_wait!(:TERM) }
+
+    it "should behave as expected" do
+      expect(resque_pool).to receive(:signal_all_workers).with(:USR2)
+      expect(resque_pool).to receive(:signal_all_workers).with(:TERM)
+      expect(resque_pool).to receive(:reap_all_workers).with(0)
+      expect(subject).to eq :break
+    end
+  end
+
   describe "#worker_delta_for" do
     let(:queues) { "queues" }
     let(:spawn_limiter) { Resque::Pool::SpawnLimiter.new(delay_step: 10, delay_max: 360) }

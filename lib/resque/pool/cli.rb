@@ -43,6 +43,10 @@ module Resque
           opt.on("-p", '--pidfile FILE', "PID file location") { |c| opts[:pidfile] = c }
           opt.on("-E", '--environment ENVIRONMENT', "Set RAILS_ENV/RACK_ENV/RESQUE_ENV") { |c| opts[:environment] = c }
           opt.on("-s", '--spawn-delay MS', Integer, "Delay in milliseconds between spawning missing workers") { |c| opts[:spawn_delay] = c }
+          opt.on('--term-graceful-wait-with-period S', Integer, "On TERM signal, wait for workers to shut down gracefully during the period") { |c|
+            opts[:term_graceful_wait] = true
+            opts[:term_graceful_wait_period] = c
+          }
           opt.on('--term-graceful-wait', "On TERM signal, wait for workers to shut down gracefully") { opts[:term_graceful_wait] = true }
           opt.on('--term-graceful',      "On TERM signal, shut down workers gracefully") { opts[:term_graceful] = true }
           opt.on('--term-immediate',     "On TERM signal, shut down workers immediately (default)") { opts[:term_immediate] = true }
@@ -116,7 +120,10 @@ module Resque
         if opts[:daemon]
           Resque::Pool.handle_winch = true
         end
-        if opts[:term_graceful_wait]
+        if opts[:term_graceful_wait_period]
+           Resque::Pool.term_behavior = "graceful_worker_shutdown_and_wait"
+           Resque::Pool.term_graceful_wait_period = opts[:term_graceful_wait_period]
+        elsif opts[:term_graceful_wait]
           Resque::Pool.term_behavior = "graceful_worker_shutdown_and_wait"
         elsif opts[:term_graceful]
           Resque::Pool.term_behavior = "graceful_worker_shutdown"

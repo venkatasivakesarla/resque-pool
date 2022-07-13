@@ -283,7 +283,11 @@ module Resque
       when :TERM
         case self.class.term_behavior
         when "graceful_worker_shutdown_and_wait"
-          graceful_worker_shutdown_and_wait!(signal)
+          if self.class.term_graceful_wait_period
+            graceful_worker_shutdown_and_wait_period!(signal, self.class.term_graceful_wait_period)
+          else
+            graceful_worker_shutdown_and_wait!(signal)
+          end
         when "graceful_worker_shutdown"
           graceful_worker_shutdown!(signal)
         when "term_and_wait"
@@ -295,7 +299,26 @@ module Resque
     end
 
     class << self
-      attr_accessor :term_behavior
+      attr_accessor :term_behavior, :term_graceful_wait_period
+    end
+
+    def graceful_worker_shutdown_and_wait_period!(signal, period)
+      log "#{signal}: graceful shutdown, waiting for children #{period} seconds"
+      quit = false
+      force_term_time = Time.now + period
+      Thread.new do
+        while Time.now < force_term_time
+          return if quit == true
+          sleep 1
+        end
+        # Will get here only time time has reached and has not quit
+        signal_all_workers(:TERM)
+      end
+      signal_all_workers(:USR2) # Stop all workers from picking up new jobs
+      signal_all_workers(:QUIT) # Stop all workers after finish jobs
+      reap_all_workers(0) # will hang until all workers are shutdown
+      quit = true
+      :break
     end
 
     def graceful_worker_shutdown_and_wait!(signal)

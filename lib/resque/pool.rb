@@ -308,11 +308,13 @@ module Resque
       force_term_time = Time.now + period
       Thread.new do
         while Time.now < force_term_time
-          return if quit == true
+          break if quit == true
           sleep 1
         end
-        # Will get here only time time has reached and has not quit
-        signal_all_workers(:TERM)
+        # if quit is true then we have shutdown gracefully
+        # if quit is false then the timer has been reached and we have not quit
+        #   and so now we want to force kill
+        signal_all_workers(:TERM) unless quit
       end
       signal_all_workers(:USR2) # Stop all workers from picking up new jobs
       signal_all_workers(:QUIT) # Stop all workers after finish jobs

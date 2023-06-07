@@ -314,10 +314,16 @@ module Resque
         # if quit is true then we have shutdown gracefully
         # if quit is false then the timer has been reached and we have not quit
         #   and so now we want to force kill
+        # When term_child is true, then this is the 2nd TERM signal to send to
+        # the worker if it hasn't quit.
         signal_all_workers(:TERM) unless quit
       end
       signal_all_workers(:USR2) # Stop all workers from picking up new jobs
-      signal_all_workers(:QUIT) # Stop all workers after finish jobs
+      if term_child
+        signal_all_workers(:TERM) # If TERM_CHILD env is set, workers will relay TERM to the job processes
+      else
+        signal_all_workers(:QUIT) # Stop all workers after finish jobs
+      end
       reap_all_workers(0) # will hang until all workers are shutdown
       quit = true
       :break
@@ -543,7 +549,7 @@ module Resque
       worker.queue_definition = queues
       worker.spawned_at = Time.now
       worker.pool_master_pid = Process.pid
-      worker.term_timeout = ENV['RESQUE_TERM_TIMEOUT'] || 4.0
+      worker.term_timeout = (ENV['RESQUE_TERM_TIMEOUT'] || 4.0).to_f
       worker.term_child = ENV['TERM_CHILD']
       if worker.respond_to?(:run_at_exit_hooks=)
         # resque doesn't support this until 1.24, but we support 1.22

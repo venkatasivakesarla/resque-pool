@@ -14,7 +14,7 @@ module Resque
   class Pool
     SIG_QUEUE_MAX_SIZE = 5
     DEFAULT_WORKER_INTERVAL = 5
-    QUEUE_SIGS = [ :QUIT, :INT, :TERM, :USR1, :USR2, :CONT, :HUP, :WINCH, ]
+    QUEUE_SIGS = [ :QUIT, :INT, :TERM, :USR1, :USR2, :CONT, :HUP, :WINCH, :TRAP, ]
     CHUNK_SIZE = (16 * 1024)
 
     include Logging
@@ -251,7 +251,7 @@ module Resque
 
     def handle_sig_queue!
       case signal = sig_queue.shift
-      when :USR1, :USR2, :CONT
+      when :USR1, :USR2, :CONT, :TRAP
         log "#{signal}: sending to all workers"
         signal_all_workers(signal)
       when :HUP
